@@ -69,29 +69,7 @@ def run_robust_lpa(edges, labels, max_iterations=15):
             print("Converged successfully.")
             break
    
-    communities = (
-        current_labels.map(lambda x: (x[1], x[0]))
-        .groupByKey()
-        .map(lambda x: set(x[1]))
-    )
-
-    current_labels.unpersist()
-
-
-    return communities.collect()
-
-def save_driver_communities(communities, output_path):
-  # Appiattisce: genera coppie (nodo, id_comunita)
-  flat_comms = [
-      (node, comm_id)
-      for comm_id, comm in enumerate(communities)
-      for node in comm
-  ]
-
-  # Crea RDD, ordina e salva nello stesso formato di gt_mapped
-  sc.parallelize(flat_comms).sortByKey().map(
-      lambda x: f"{x[0]},{x[1]}"
-  ).saveAsTextFile(output_path)
+    return current_labels
 
 def log_benchmark(algo_name, elapsed_time):
   with open(f"{RUN_DIR}/benchmark_times.txt", "a") as f:
@@ -187,11 +165,16 @@ if __name__ == "__main__":
     gt_mapped.map(lambda x: f"{x[0]},{x[1]}").saveAsTextFile(f"{RUN_DIR}/gt_mapped")
 
     t1 = time.time()
-    detected_communities = run_robust_lpa(edges, initial_labels, max_iterations=10)
+    result_labels_rdd = run_robust_lpa(edges, initial_labels, max_iterations=10)
+    result_labels_rdd.count()
     t_lpa = time.time() - t1
     print("LPA Execution Time:", t_lpa)
 
-    save_driver_communities(detected_communities, f"{RUN_DIR}/results_lpa")
+    result_labels_rdd.sortByKey().map(
+        lambda x: f"{x[0]},{x[1]}"
+    ).saveAsTextFile(f"{RUN_DIR}/results_lpa")
+
+    result_labels_rdd.unpersist()
     log_benchmark("LPA", t_lpa)
 
     spark.stop()
